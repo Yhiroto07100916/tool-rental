@@ -1,0 +1,17 @@
+app/.nuxt/
+app/.output/
+app/node_modules/
+
+api/.venv/
+__pycache__/
+*.pyc
+
+.env
+api/.env
+
+mysql_data/
+
+.DS_Store
+
+.vscode/
+.idea/
