@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .routes import router
 
 app = FastAPI(
-    title="工具貸出管理API",
+    title="工具・機材貸出管理API",
     version="0.1.0",
 )
 
@@ -24,7 +24,7 @@ app.include_router(router)
 @app.get("/")
 def root():
     return {
-        "message": "工具貸出管理API",
+        "message": "工具・機材貸出管理API",
     }
 
 

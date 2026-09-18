@@ -74,7 +74,7 @@ def update_tool(
     if not tool:
         raise HTTPException(
             status_code=404,
-            detail="工具が見つかりません",
+            detail="工具・機材が見つかりません",
         )
 
     update_data = data.model_dump(exclude_unset=True)
@@ -117,7 +117,7 @@ def delete_tool(
     if not tool:
         raise HTTPException(
             status_code=404,
-            detail="工具が見つかりません",
+            detail="工具・機材が見つかりません",
         )
 
     active_loan = (
@@ -132,14 +132,14 @@ def delete_tool(
     if active_loan:
         raise HTTPException(
             status_code=400,
-            detail="現在貸出中の工具は削除できません",
+            detail="現在貸出中の工具・機材は削除できません",
         )
 
     db.delete(tool)
     db.commit()
 
     return {
-        "message": "工具を削除しました",
+        "message": "工具・機材を削除しました",
     }
 
 
@@ -153,7 +153,7 @@ def create_loan(
     if not tool:
         raise HTTPException(
             status_code=404,
-            detail="工具が見つかりません",
+            detail="工具・機材が見つかりません",
         )
 
     if data.quantity > tool.available_quantity:

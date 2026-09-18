@@ -29,7 +29,7 @@ function getToolPayload(body: any) {
   const name = typeof body.name === 'string' ? body.name.trim() : ''
 
   if (!name) {
-    throw new Error('工具名を入力してください')
+    throw new Error('工具・機材・名を入力してください')
   }
 
   const quantity = body.quantity === undefined ? 1 : Number(body.quantity)
@@ -127,7 +127,7 @@ export default {
         if (!Number.isInteger(toolId) || toolId <= 0) {
           return json(
             {
-              detail: '工具IDが正しくありません',
+              detail: '工具・機材IDが正しくありません',
             },
             400,
           )
@@ -138,7 +138,7 @@ export default {
         if (!tool) {
           return json(
             {
-              detail: '工具が見つかりません',
+              detail: '工具・機材が見つかりません',
             },
             404,
           )
@@ -205,7 +205,7 @@ export default {
         if (!Number.isInteger(toolId) || toolId <= 0) {
           return json(
             {
-              detail: '工具IDを指定してください',
+              detail: '工具・機材IDを指定してください',
             },
             400,
           )
@@ -219,7 +219,7 @@ export default {
         ) {
           return json(
             {
-              detail: '貸し出す工具個体を1つ以上選択してください',
+              detail: '貸し出す工具・機材個体を1つ以上選択してください',
             },
             400,
           )
@@ -230,7 +230,7 @@ export default {
         if (uniqueToolItemIds.length !== toolItemIds.length) {
           return json(
             {
-              detail: '同じ工具個体を重複して選択することはできません',
+              detail: '同じ工具・機材個体を重複して選択することはできません',
             },
             400,
           )
@@ -243,7 +243,7 @@ export default {
         if (!tool) {
           return json(
             {
-              detail: '工具が見つかりません',
+              detail: '工具・機材が見つかりません',
             },
             404,
           )
@@ -286,7 +286,7 @@ export default {
         if (toolItems.length !== uniqueToolItemIds.length) {
           return json(
             {
-              detail: '指定された工具個体の一部が見つかりません',
+              detail: '指定された工具・機材個体の一部が見つかりません',
             },
             404,
           )
@@ -299,7 +299,7 @@ export default {
         if (unavailableItem) {
           return json(
             {
-              detail: `工具個体 ${unavailableItem.management_number} は現在貸出できません`,
+              detail: `工具・機材個体 ${unavailableItem.management_number} は現在貸出できません`,
             },
             400,
           )
@@ -784,7 +784,7 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
         if (!existingTool) {
           return json(
             {
-              detail: '工具が見つかりません',
+              detail: '工具・機材が見つかりません',
             },
             404,
           )
@@ -803,7 +803,7 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
           if (!name) {
             return json(
               {
-                detail: '工具名を入力してください',
+                detail: '工具・機材名を入力してください',
               },
               400,
             )
@@ -877,7 +877,7 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
           if (borrowedQuantity > 0) {
             return json(
               {
-                detail: '貸出中の工具は削除できません',
+                detail: '貸出中の工具・機材は削除できません',
               },
               400,
             )

@@ -2,11 +2,11 @@
   <div>
     <div class="mb-6">
       <div class="page-title">
-        工具返却
+        工具・機材・機材・機材返却
       </div>
 
       <div class="page-subtitle">
-        クラスから貸出中の工具を検索し、返しに来た人を記録して返却します。
+        クラスから貸出中の工具・機材・機材を検索し、返しに来た人を記録して返却します。
       </div>
     </div>
 
@@ -38,7 +38,7 @@
               :loading="loading"
               @click="searchLoans"
             >
-              貸出中の工具を検索
+              貸出中の工具・機材・機材を検索
             </v-btn>
           </v-card-text>
         </v-card>
@@ -79,7 +79,7 @@
       >
         <v-card elevation="1">
           <v-card-title>
-            返却する工具
+            返却する工具・機材・機材
           </v-card-title>
 
           <v-divider />
@@ -94,7 +94,7 @@
             v-else-if="loans.length === 0"
           >
             <div class="table-empty">
-              現在貸出中の工具はありません。
+              現在貸出中の工具・機材はありません。
             </div>
           </v-card-text>
 
@@ -139,7 +139,7 @@
               :loading="returning"
               @click="returnSelected"
             >
-              選択した工具を返却する
+              選択した工具・機材を返却する
             </v-btn>
           </v-card-text>
         </v-card>
