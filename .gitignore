@@ -15,3 +15,44 @@ mysql_data/
 
 .vscode/
 .idea/
+
+# Nuxt / Node.js
+app/.nuxt/
+app/.output/
+app/.data/
+app/.nitro/
+app/.cache/
+app/node_modules/
+app/dist/
+
+# Local secrets
+app/.dev.vars
+app/.env
+app/.env.*
+!app/.env.example
+
+# Cloudflare local state and credentials
+app/.wrangler/
+app/.dev.vars.*
+
+# Local files
+app/.DS_Store
+app/**/*.log
+
+# App historical backups
+app/.backup/
+app/**/*.bak
+app/**/*.bak-*
+app/**/*.bak.*
+app/wrangler.jsonc.before-*
+
+# Historical source snapshots
+app/**/*.before-*
+
+# Accidental empty file
+/app/が表示されている場合は
+
+# Wrangler config backups
+app/wrangler.jsonc.bak
+app/wrangler.jsonc.before-*
+app/.DS_Store

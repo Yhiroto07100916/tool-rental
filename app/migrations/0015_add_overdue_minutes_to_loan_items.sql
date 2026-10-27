@@ -1,0 +1,2 @@
+ALTER TABLE loan_items
+ADD COLUMN overdue_minutes INTEGER NOT NULL DEFAULT 0;

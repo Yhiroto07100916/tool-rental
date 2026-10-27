@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tool-rental-api",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-15",
+  "triggers": {
+    "crons": [
+      "* * * * *"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tool-rental",
+      "database_id": "1fc3c5e4-6bc4-45e0-8c25-1383c1e7f993"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "NOTIFICATION_SCHEDULER",
+        "class_name": "NotificationScheduler"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "notification-scheduler-v1",
+      "new_sqlite_classes": [
+        "NotificationScheduler"
+      ]
+    }
+  ]
+}
