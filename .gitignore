@@ -56,3 +56,6 @@ app/**/*.before-*
 app/wrangler.jsonc.bak
 app/wrangler.jsonc.before-*
 app/.DS_Store
+
+# Local dependency backups
+app/node_modules.backup-*/
