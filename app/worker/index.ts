@@ -6819,6 +6819,47 @@ const loanHistoryEditMatch = url.pathname.match(/^\/loans\/history\/(\d+)$/)
             .run()
         } else if (existingTimes.results.length > 0) {
           const keepId = existingTimes.results[0].id
+          const obsoleteIds = existingTimes.results
+            .slice(1)
+            .map(item => item.id)
+
+          if (obsoleteIds.length > 0) {
+            const placeholders = obsoleteIds.map(() => '?').join(', ')
+            await env.DB
+              .prepare(`
+                INSERT INTO loan_return_notices (
+                  loan_id,
+                  return_time_id,
+                  notice_date,
+                  notified_at,
+                  overdue_notified_at,
+                  return_time_type
+                )
+                SELECT
+                  loan_id,
+                  ?,
+                  notice_date,
+                  notified_at,
+                  overdue_notified_at,
+                  return_time_type
+                FROM loan_return_notices
+                WHERE return_time_id IN (${placeholders})
+                ON CONFLICT(loan_id, return_time_id, notice_date)
+                DO UPDATE SET
+                  notified_at = COALESCE(
+                    loan_return_notices.notified_at,
+                    excluded.notified_at
+                  ),
+                  overdue_notified_at = COALESCE(
+                    loan_return_notices.overdue_notified_at,
+                    excluded.overdue_notified_at
+                  ),
+                  return_time_type = excluded.return_time_type
+              `)
+              .bind(keepId, ...obsoleteIds)
+              .run()
+          }
+
           await env.DB.batch([
             env.DB
               .prepare(`
@@ -6948,6 +6989,47 @@ const loanHistoryEditMatch = url.pathname.match(/^\/loans\/history\/(\d+)$/)
             .run()
         } else if (existingTimes.results.length > 0) {
           const keepId = existingTimes.results[0].id
+          const obsoleteIds = existingTimes.results
+            .slice(1)
+            .map(item => item.id)
+
+          if (obsoleteIds.length > 0) {
+            const placeholders = obsoleteIds.map(() => '?').join(', ')
+            await env.DB
+              .prepare(`
+                INSERT INTO loan_return_notices (
+                  loan_id,
+                  return_time_id,
+                  notice_date,
+                  notified_at,
+                  overdue_notified_at,
+                  return_time_type
+                )
+                SELECT
+                  loan_id,
+                  ?,
+                  notice_date,
+                  notified_at,
+                  overdue_notified_at,
+                  return_time_type
+                FROM loan_return_notices
+                WHERE return_time_id IN (${placeholders})
+                ON CONFLICT(loan_id, return_time_id, notice_date)
+                DO UPDATE SET
+                  notified_at = COALESCE(
+                    loan_return_notices.notified_at,
+                    excluded.notified_at
+                  ),
+                  overdue_notified_at = COALESCE(
+                    loan_return_notices.overdue_notified_at,
+                    excluded.overdue_notified_at
+                  ),
+                  return_time_type = excluded.return_time_type
+              `)
+              .bind(keepId, ...obsoleteIds)
+              .run()
+          }
+
           await env.DB.batch([
             env.DB
               .prepare(`
