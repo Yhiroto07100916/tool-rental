@@ -5049,6 +5049,22 @@ export default {
           )
         }
 
+        if (dueAt !== null && universalReturnEnabled !== 1) {
+          const globalReturnDueAt = await getNextUniversalReturnDueAt(
+            env.DB,
+            new Date(),
+            isChief,
+          )
+
+          if (
+            globalReturnDueAt !== null &&
+            parseJstDateTime(globalReturnDueAt) <
+              parseJstDateTime(dueAt)
+          ) {
+            dueAt = globalReturnDueAt
+          }
+        }
+
         const loanResult = await env.DB
           .prepare(`
             INSERT INTO loans (
@@ -5977,6 +5993,31 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
 
           const isChief = loanResult.class_name === 'チーフ'
 
+          const waitingReservation = await env.DB
+            .prepare(`
+              SELECT class_name, name
+              FROM reservations
+              WHERE tool_id = ?
+                AND status = 'waiting'
+              ORDER BY created_at ASC, id ASC
+              LIMIT 1
+            `)
+            .bind(loanResult.tool_id)
+            .first<{
+              class_name: string
+              name: string
+            }>()
+
+          if (waitingReservation) {
+            return json(
+              {
+                detail:
+                  `この工具・機材には予約があります。${waitingReservation.class_name} ${waitingReservation.name}さんの予約を先に処理してください`,
+              },
+              400,
+            )
+          }
+
           const loanDurationMinutes = isChief
             ? loanResult.loan_duration_minutes_per_chief
             : loanResult.loan_duration_minutes
@@ -6104,12 +6145,26 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
             }
           }
 
-          const dueAt = formatJstDateTime(
+          let dueAt = formatJstDateTime(
             new Date(
               Date.now() +
                 loanDurationMinutes * 60 * 1000,
             ),
           )
+
+          const globalReturnDueAt = await getNextUniversalReturnDueAt(
+            env.DB,
+            new Date(),
+            isChief,
+          )
+
+          if (
+            globalReturnDueAt !== null &&
+            parseJstDateTime(globalReturnDueAt) <
+              parseJstDateTime(dueAt)
+          ) {
+            dueAt = globalReturnDueAt
+          }
 
           const newLoanResult = await env.DB
             .prepare(`
