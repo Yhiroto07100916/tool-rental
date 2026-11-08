@@ -5792,7 +5792,81 @@ if (
         })
       }
 
-if (url.pathname === '/loans/history' && request.method === 'GET') {
+const loanHistoryEditMatch = url.pathname.match(/^\/loans\/history\/(\d+)$/)
+
+      if (loanHistoryEditMatch && request.method === 'PATCH') {
+        const adminError = requireAdmin(authenticated)
+        if (adminError) return adminError
+
+        const loanItemId = Number(loanHistoryEditMatch[1])
+        if (!Number.isInteger(loanItemId) || loanItemId <= 0) {
+          return json({ detail: '貸出履歴IDが正しくありません' }, 400)
+        }
+
+        let body: any
+        try {
+          body = await request.json()
+        } catch {
+          return json({ detail: 'リクエストが正しくありません' }, 400)
+        }
+
+        const className = typeof body.class_name === 'string' ? body.class_name.trim() : ''
+        const borrowerName = typeof body.borrower_name === 'string' ? body.borrower_name.trim() : ''
+        const dueAt = body.due_at === null || body.due_at === '' ? null : body.due_at
+
+        if (!className || !borrowerName) {
+          return json({ detail: 'クラスと氏名を入力してください' }, 400)
+        }
+        if (dueAt !== null && (
+          typeof dueAt !== 'string' ||
+          !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dueAt) ||
+          Number.isNaN(new Date(`${dueAt}:00+09:00`).getTime())
+        )) {
+          return json({ detail: '返却期限の形式が正しくありません' }, 400)
+        }
+
+        const loanItem = await env.DB
+          .prepare(`
+            SELECT loan_items.loan_id
+            FROM loan_items
+            WHERE loan_items.id = ?
+          `)
+          .bind(loanItemId)
+          .first<{ loan_id: number }>()
+
+        if (!loanItem) return json({ detail: '貸出履歴が見つかりません' }, 404)
+
+        let borrower = await env.DB
+          .prepare('SELECT id FROM borrowers WHERE class_name = ? AND name = ? LIMIT 1')
+          .bind(className, borrowerName)
+          .first<{ id: number }>()
+
+        if (!borrower) {
+          const inserted = await env.DB
+            .prepare(`
+              INSERT INTO borrowers (class_name, name, created_at, updated_at)
+              VALUES (?, ?, datetime('now', '+9 hours'), datetime('now', '+9 hours'))
+            `)
+            .bind(className, borrowerName)
+            .run()
+          const borrowerId = Number(inserted.meta.last_row_id)
+          if (!borrowerId) return json({ detail: '借用者情報を更新できませんでした' }, 500)
+          borrower = { id: borrowerId }
+        }
+
+        await env.DB
+          .prepare(`
+            UPDATE loans
+            SET borrower_id = ?, due_at = ?, updated_at = datetime('now', '+9 hours')
+            WHERE id = ?
+          `)
+          .bind(borrower.id, dueAt ? dueAt.replace('T', ' ') + ':00' : null, loanItem.loan_id)
+          .run()
+
+        return json({ detail: '貸出履歴を更新しました' })
+      }
+
+      if (url.pathname === '/loans/history' && request.method === 'GET') {
           const className = url.searchParams.get('class_name')?.trim()
           const status = url.searchParams.get('status')?.trim()
 
