@@ -561,11 +561,25 @@ const canRegisterCurrentTool = computed(() => {
   if (!currentTool.value) return false
   if (currentTool.value.available_quantity <= 0) return false
   if (currentItemIds.value.length < 1) return false
+  const alreadySelectedQuantity = selectedTools.value
+    .filter(selected =>
+      selected.toolId === currentToolId.value &&
+      selected.type === 'loan',
+    )
+    .reduce((total, selected) => total + selected.itemIds.length, 0)
+
   if (
     currentItemIds.value.length >
-    currentTool.value.available_quantity
+    currentTool.value.available_quantity - alreadySelectedQuantity
   ) return false
-   return true
+
+  if (
+    currentTool.value.max_quantity_per_class !== null &&
+    currentItemIds.value.length + alreadySelectedQuantity >
+      currentTool.value.max_quantity_per_class
+  ) return false
+
+  return true
 })
 
 const getTool = (toolId: number) =>
