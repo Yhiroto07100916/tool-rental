@@ -5801,6 +5801,20 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
               loan_items.loan_id,
               loan_items.tool_item_id,
               loan_items.returned_at AS item_returned_at,
+              CASE
+                WHEN loan_items.returned_at IS NOT NULL
+                  AND EXISTS (
+                    SELECT 1
+                    FROM loan_items AS extended_items
+                    INNER JOIN loans AS extended_loans
+                      ON extended_loans.id = extended_items.loan_id
+                    WHERE extended_items.tool_item_id = loan_items.tool_item_id
+                      AND extended_loans.id != loans.id
+                      AND extended_loans.borrowed_at = loan_items.returned_at
+                  )
+                THEN 1
+                ELSE 0
+              END AS is_extended,
 
               loans.borrower_id,
               loans.tool_id,
