@@ -6369,14 +6369,6 @@ const loanHistoryEditMatch = url.pathname.match(/^\/loans\/history\/(\d+)$/)
               .prepare(`
                 UPDATE loans
                 SET
-                  due_notice_sent_at = COALESCE(
-                    due_notice_sent_at,
-                    datetime('now', '+9 hours')
-                  ),
-                  due_at_notification_sent_at = COALESCE(
-                    due_at_notification_sent_at,
-                    datetime('now', '+9 hours')
-                  ),
                   returned_quantity = returned_quantity + 1,
                   status = CASE
                     WHEN returned_quantity + 1 >= quantity
