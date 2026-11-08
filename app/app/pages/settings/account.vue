@@ -219,8 +219,7 @@
         </div>
 
         <div class="text-body-2 text-medium-emphasis mb-4">
-          設定した時刻になると、まだ返却されていない工具・機材をクラスごとにまとめて通知します。
-          複数の返却時刻を設定できます。設定しない場合は通知されません。
+          設定した時刻に、返却されていない工具・機材をクラスごとにまとめて通知します。返却時刻は1つ設定できます。
         </div>
 
         <v-alert
@@ -241,38 +240,24 @@
           {{ returnTimeSuccess }}
         </v-alert>
 
-        <div
-          v-for="(returnTime, index) in universalReturnTimes"
-          :key="index"
-          class="d-flex align-center ga-3 mb-3"
-        >
+        <div class="mb-4">
           <input
-            v-model="universalReturnTimes[index]"
+            v-model="universalReturnTime"
             type="time"
             step="60"
             :disabled="returnTimeLoading"
             class="return-time-input"
           />
-
           <v-btn
+            v-if="universalReturnTime"
             icon="mdi-delete"
             variant="text"
             color="error"
             :disabled="returnTimeLoading"
-            aria-label="返却時刻を削除"
-            @click="removeReturnTime(index)"
+            aria-label="返却時刻を解除"
+            @click="universalReturnTime = ''"
           />
         </div>
-
-        <v-btn
-          variant="text"
-          prepend-icon="mdi-plus"
-          :disabled="returnTimeLoading"
-          class="mb-4"
-          @click="addReturnTime"
-        >
-          返却時刻を追加
-        </v-btn>
 
         <div>
           <v-btn
@@ -292,8 +277,7 @@
         </div>
 
         <div class="text-body-2 text-medium-emphasis mb-4">
-          チーフの貸出について、設定した時刻になると、まだ返却されていない工具・機材をまとめて通知します。
-          複数の返却時刻を設定できます。設定しない場合は通知されません。
+          チーフの貸出について、設定した時刻に返却されていない工具・機材をまとめて通知します。返却時刻は1つ設定できます。
         </div>
 
         <v-alert
@@ -314,38 +298,24 @@
           {{ chiefReturnTimeSuccess }}
         </v-alert>
 
-        <div
-          v-for="(returnTime, index) in chiefUniversalReturnTimes"
-          :key="index"
-          class="d-flex align-center ga-3 mb-3"
-        >
+        <div class="mb-4">
           <input
-            v-model="chiefUniversalReturnTimes[index]"
+            v-model="chiefUniversalReturnTime"
             type="time"
             step="60"
             :disabled="chiefReturnTimeLoading"
             class="return-time-input"
           />
-
           <v-btn
+            v-if="chiefUniversalReturnTime"
             icon="mdi-delete"
             variant="text"
             color="error"
             :disabled="chiefReturnTimeLoading"
-            aria-label="チーフ用返却時刻を削除"
-            @click="removeChiefReturnTime(index)"
+            aria-label="チーフ用返却時刻を解除"
+            @click="chiefUniversalReturnTime = ''"
           />
         </div>
-
-        <v-btn
-          variant="text"
-          prepend-icon="mdi-plus"
-          :disabled="chiefReturnTimeLoading"
-          class="mb-4"
-          @click="addChiefReturnTime"
-        >
-          返却時刻を追加
-        </v-btn>
 
         <div>
           <v-btn
@@ -726,12 +696,12 @@ const lineDestinationsLoading = ref(false)
 
 const historyDeleteLoading = ref(false)
 
-const universalReturnTimes = ref<string[]>([])
+const universalReturnTime = ref('')
 const returnTimeLoading = ref(false)
 const returnTimeError = ref('')
 const returnTimeSuccess = ref('')
 
-const chiefUniversalReturnTimes = ref<string[]>([])
+const chiefUniversalReturnTime = ref('')
 const chiefReturnTimeLoading = ref(false)
 const chiefReturnTimeError = ref('')
 const chiefReturnTimeSuccess = ref('')
@@ -1212,10 +1182,8 @@ const loadUniversalReturnTimes = async () => {
       }>
     }>('/settings/return-time')
 
-    universalReturnTimes.value =
-      result.universal_return_times.map(
-        item => item.return_time,
-      )
+    universalReturnTime.value =
+      result.universal_return_times[0]?.return_time ?? ''
   } catch (error: any) {
     returnTimeError.value =
       error?.data?.detail ??
@@ -1238,10 +1206,8 @@ const loadChiefUniversalReturnTimes = async () => {
       }>
     }>('/settings/return-time-chief')
 
-    chiefUniversalReturnTimes.value =
-      result.universal_return_times.map(
-        item => item.return_time,
-      )
+    chiefUniversalReturnTime.value =
+      result.universal_return_times[0]?.return_time ?? ''
   } catch (error: any) {
     chiefReturnTimeError.value =
       error?.data?.detail ??
@@ -1251,25 +1217,13 @@ const loadChiefUniversalReturnTimes = async () => {
   }
 }
 
-const addChiefReturnTime = () => {
-  chiefUniversalReturnTimes.value.push('')
-  chiefReturnTimeError.value = ''
-  chiefReturnTimeSuccess.value = ''
-}
-
-const removeChiefReturnTime = (index: number) => {
-  chiefUniversalReturnTimes.value.splice(index, 1)
-  chiefReturnTimeError.value = ''
-  chiefReturnTimeSuccess.value = ''
-}
-
-const saveChiefUniversalReturnTimes = async () => {
+ const saveChiefUniversalReturnTimes = async () => {
   chiefReturnTimeError.value = ''
   chiefReturnTimeSuccess.value = ''
 
-  const values = chiefUniversalReturnTimes.value.map(
-    value => String(value).trim(),
-  )
+  const values = chiefUniversalReturnTime.value.trim()
+    ? [chiefUniversalReturnTime.value.trim()]
+    : []
 
   if (values.some(value => value === '')) {
     chiefReturnTimeError.value =
@@ -1311,10 +1265,8 @@ const saveChiefUniversalReturnTimes = async () => {
       },
     })
 
-    chiefUniversalReturnTimes.value =
-      result.universal_return_times.map(
-        item => item.return_time,
-      )
+    chiefUniversalReturnTime.value =
+      result.universal_return_times[0]?.return_time ?? ''
 
     chiefReturnTimeSuccess.value =
       'チーフ用全体返却時刻を保存しました'
@@ -1327,25 +1279,13 @@ const saveChiefUniversalReturnTimes = async () => {
   }
 }
 
-const addReturnTime = () => {
-  universalReturnTimes.value.push('')
-  returnTimeError.value = ''
-  returnTimeSuccess.value = ''
-}
-
-const removeReturnTime = (index: number) => {
-  universalReturnTimes.value.splice(index, 1)
-  returnTimeError.value = ''
-  returnTimeSuccess.value = ''
-}
-
-const saveUniversalReturnTimes = async () => {
+ const saveUniversalReturnTimes = async () => {
   returnTimeError.value = ''
   returnTimeSuccess.value = ''
 
-  const values = universalReturnTimes.value.map(
-    value => String(value).trim(),
-  )
+  const values = universalReturnTime.value.trim()
+    ? [universalReturnTime.value.trim()]
+    : []
 
   if (values.some(value => value === '')) {
     returnTimeError.value =
@@ -1387,10 +1327,8 @@ const saveUniversalReturnTimes = async () => {
       },
     })
 
-    universalReturnTimes.value =
-      result.universal_return_times.map(
-        item => item.return_time,
-      )
+    universalReturnTime.value =
+      result.universal_return_times[0]?.return_time ?? ''
 
     if (result.universal_return_times.length === 0) {
       returnTimeSuccess.value =
