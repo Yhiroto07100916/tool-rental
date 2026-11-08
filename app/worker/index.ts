@@ -6746,52 +6746,6 @@ const loanHistoryEditMatch = url.pathname.match(/^\/loans\/history\/(\d+)$/)
             return_time: string
           }>()
 
-        if (uniqueValues.length > 0) {
-          const nextReturnDueAt = await getNextUniversalReturnDueAt(
-            env.DB,
-            new Date(),
-            false,
-          )
-
-          if (nextReturnDueAt !== null) {
-            await env.DB.batch([
-              env.DB
-                .prepare(`
-                  UPDATE loans
-                  SET due_at = ?
-                  WHERE status = 'borrowed'
-                    AND borrower_id IN (
-                      SELECT id FROM borrowers
-                      WHERE class_name != 'チーフ'
-                    )
-                    AND tool_id IN (
-                      SELECT id FROM tools
-                      WHERE universal_return_enabled = 1
-                    )
-                `)
-                .bind(nextReturnDueAt),
-              env.DB
-                .prepare(`
-                  UPDATE loans
-                  SET due_at = ?
-                  WHERE status = 'borrowed'
-                    AND borrower_id IN (
-                      SELECT id FROM borrowers
-                      WHERE class_name != 'チーフ'
-                    )
-                    AND tool_id IN (
-                      SELECT id FROM tools
-                      WHERE universal_return_enabled = 0
-                    )
-                    AND due_at IS NOT NULL
-                    AND datetime(due_at) > datetime(?)
-                `)
-                .bind(nextReturnDueAt, nextReturnDueAt),
-            ])
-            await scheduleNotificationAlarm(env)
-          }
-        }
-
         return json({
           universal_return_times: result.results,
         })
@@ -6940,7 +6894,53 @@ const loanHistoryEditMatch = url.pathname.match(/^\/loans\/history\/(\d+)$/)
             return_time: string
           }>()
 
-        return json({
+                if (uniqueValues.length > 0) {
+          const nextReturnDueAt = await getNextUniversalReturnDueAt(
+            env.DB,
+            new Date(),
+            false,
+          )
+
+          if (nextReturnDueAt !== null) {
+            await env.DB.batch([
+              env.DB
+                .prepare(`
+                  UPDATE loans
+                  SET due_at = ?
+                  WHERE status = 'borrowed'
+                    AND borrower_id IN (
+                      SELECT id FROM borrowers
+                      WHERE class_name != 'チーフ'
+                    )
+                    AND tool_id IN (
+                      SELECT id FROM tools
+                      WHERE universal_return_enabled = 1
+                    )
+                `)
+                .bind(nextReturnDueAt),
+              env.DB
+                .prepare(`
+                  UPDATE loans
+                  SET due_at = ?
+                  WHERE status = 'borrowed'
+                    AND borrower_id IN (
+                      SELECT id FROM borrowers
+                      WHERE class_name != 'チーフ'
+                    )
+                    AND tool_id IN (
+                      SELECT id FROM tools
+                      WHERE universal_return_enabled = 0
+                    )
+                    AND due_at IS NOT NULL
+                    AND datetime(due_at) > datetime(?)
+                `)
+                .bind(nextReturnDueAt, nextReturnDueAt),
+            ])
+            await scheduleNotificationAlarm(env)
+          }
+        }
+
+return json({
           universal_return_times: result.results,
         })
       }
@@ -6961,52 +6961,6 @@ const loanHistoryEditMatch = url.pathname.match(/^\/loans\/history\/(\d+)$/)
             id: number
             return_time: string
           }>()
-
-        if (uniqueValues.length > 0) {
-          const nextReturnDueAt = await getNextUniversalReturnDueAt(
-            env.DB,
-            new Date(),
-            true,
-          )
-
-          if (nextReturnDueAt !== null) {
-            await env.DB.batch([
-              env.DB
-                .prepare(`
-                  UPDATE loans
-                  SET due_at = ?
-                  WHERE status = 'borrowed'
-                    AND borrower_id IN (
-                      SELECT id FROM borrowers
-                      WHERE class_name = 'チーフ'
-                    )
-                    AND tool_id IN (
-                      SELECT id FROM tools
-                      WHERE universal_return_enabled_for_chief = 1
-                    )
-                `)
-                .bind(nextReturnDueAt),
-              env.DB
-                .prepare(`
-                  UPDATE loans
-                  SET due_at = ?
-                  WHERE status = 'borrowed'
-                    AND borrower_id IN (
-                      SELECT id FROM borrowers
-                      WHERE class_name = 'チーフ'
-                    )
-                    AND tool_id IN (
-                      SELECT id FROM tools
-                      WHERE universal_return_enabled_for_chief = 0
-                    )
-                    AND due_at IS NOT NULL
-                    AND datetime(due_at) > datetime(?)
-                `)
-                .bind(nextReturnDueAt, nextReturnDueAt),
-            ])
-            await scheduleNotificationAlarm(env)
-          }
-        }
 
         return json({
           universal_return_times: result.results,
@@ -7156,7 +7110,53 @@ const loanHistoryEditMatch = url.pathname.match(/^\/loans\/history\/(\d+)$/)
             return_time: string
           }>()
 
-        return json({
+                if (uniqueValues.length > 0) {
+          const nextReturnDueAt = await getNextUniversalReturnDueAt(
+            env.DB,
+            new Date(),
+            true,
+          )
+
+          if (nextReturnDueAt !== null) {
+            await env.DB.batch([
+              env.DB
+                .prepare(`
+                  UPDATE loans
+                  SET due_at = ?
+                  WHERE status = 'borrowed'
+                    AND borrower_id IN (
+                      SELECT id FROM borrowers
+                      WHERE class_name = 'チーフ'
+                    )
+                    AND tool_id IN (
+                      SELECT id FROM tools
+                      WHERE universal_return_enabled_for_chief = 1
+                    )
+                `)
+                .bind(nextReturnDueAt),
+              env.DB
+                .prepare(`
+                  UPDATE loans
+                  SET due_at = ?
+                  WHERE status = 'borrowed'
+                    AND borrower_id IN (
+                      SELECT id FROM borrowers
+                      WHERE class_name = 'チーフ'
+                    )
+                    AND tool_id IN (
+                      SELECT id FROM tools
+                      WHERE universal_return_enabled_for_chief = 0
+                    )
+                    AND due_at IS NOT NULL
+                    AND datetime(due_at) > datetime(?)
+                `)
+                .bind(nextReturnDueAt, nextReturnDueAt),
+            ])
+            await scheduleNotificationAlarm(env)
+          }
+        }
+
+return json({
           universal_return_times: result.results,
         })
       }
