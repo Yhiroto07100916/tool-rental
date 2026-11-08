@@ -6228,6 +6228,14 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
               .prepare(`
                 UPDATE loans
                 SET
+                  due_notice_sent_at = COALESCE(
+                    due_notice_sent_at,
+                    datetime('now', '+9 hours')
+                  ),
+                  due_at_notification_sent_at = COALESCE(
+                    due_at_notification_sent_at,
+                    datetime('now', '+9 hours')
+                  ),
                   returned_quantity = returned_quantity + 1,
                   status = CASE
                     WHEN returned_quantity + 1 >= quantity
@@ -6657,27 +6665,46 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
 
         const uniqueValues = [...new Set(values)]
 
-        await env.DB
+        const existingTimes = await env.DB
           .prepare(`
-            DELETE FROM universal_return_times
+            SELECT id
+            FROM universal_return_times
+            ORDER BY id ASC
           `)
-          .run()
+          .all<{ id: number }>()
 
-        if (uniqueValues.length > 0) {
-          const statements = uniqueValues.map(
-            (value: string) =>
-              env.DB
-                .prepare(`
-                  INSERT INTO universal_return_times (
-                    return_time,
-                    created_at
-                  )
-                  VALUES (?, datetime('now', '+9 hours'))
-                `)
-                .bind(value),
-          )
-
-          await env.DB.batch(statements)
+        if (uniqueValues.length === 0) {
+          await env.DB
+            .prepare('DELETE FROM universal_return_times')
+            .run()
+        } else if (existingTimes.results.length > 0) {
+          const keepId = existingTimes.results[0].id
+          await env.DB.batch([
+            env.DB
+              .prepare(`
+                UPDATE universal_return_times
+                SET return_time = ?
+                WHERE id = ?
+              `)
+              .bind(uniqueValues[0], keepId),
+            env.DB
+              .prepare(`
+                DELETE FROM universal_return_times
+                WHERE id != ?
+              `)
+              .bind(keepId),
+          ])
+        } else {
+          await env.DB
+            .prepare(`
+              INSERT INTO universal_return_times (
+                return_time,
+                created_at
+              )
+              VALUES (?, datetime('now', '+9 hours'))
+            `)
+            .bind(uniqueValues[0])
+            .run()
         }
 
         const result = await env.DB
@@ -6767,27 +6794,46 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
 
         const uniqueValues = [...new Set(values)]
 
-        await env.DB
+        const existingTimes = await env.DB
           .prepare(`
-            DELETE FROM universal_return_times_chief
+            SELECT id
+            FROM universal_return_times_chief
+            ORDER BY id ASC
           `)
-          .run()
+          .all<{ id: number }>()
 
-        if (uniqueValues.length > 0) {
-          const statements = uniqueValues.map(
-            (value: string) =>
-              env.DB
-                .prepare(`
-                  INSERT INTO universal_return_times_chief (
-                    return_time,
-                    created_at
-                  )
-                  VALUES (?, datetime('now', '+9 hours'))
-                `)
-                .bind(value),
-          )
-
-          await env.DB.batch(statements)
+        if (uniqueValues.length === 0) {
+          await env.DB
+            .prepare('DELETE FROM universal_return_times_chief')
+            .run()
+        } else if (existingTimes.results.length > 0) {
+          const keepId = existingTimes.results[0].id
+          await env.DB.batch([
+            env.DB
+              .prepare(`
+                UPDATE universal_return_times_chief
+                SET return_time = ?
+                WHERE id = ?
+              `)
+              .bind(uniqueValues[0], keepId),
+            env.DB
+              .prepare(`
+                DELETE FROM universal_return_times_chief
+                WHERE id != ?
+              `)
+              .bind(keepId),
+          ])
+        } else {
+          await env.DB
+            .prepare(`
+              INSERT INTO universal_return_times_chief (
+                return_time,
+                created_at
+              )
+              VALUES (?, datetime('now', '+9 hours'))
+            `)
+            .bind(uniqueValues[0])
+            .run()
         }
 
         const result = await env.DB
