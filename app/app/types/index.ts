@@ -98,5 +98,6 @@ export interface Reservation {
   created_at: string
   updated_at: string
   tool_name: string
+  available_quantity?: number
   queue_position?: number
 }
