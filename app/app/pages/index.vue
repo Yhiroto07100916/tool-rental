@@ -280,7 +280,12 @@ const availableQuantity = computed(() =>
   tools.value.reduce((sum, tool) => sum + tool.available_quantity, 0),
 )
 
-const currentLoanCount = computed(() => currentLoans.value.length)
+const currentLoanCount = computed(() =>
+  currentLoans.value.reduce(
+    (total, loan) => total + (loan.tool_items?.length ?? 0),
+    0,
+  ),
+)
 
 const loadDashboard = async () => {
   errorMessage.value = ''
