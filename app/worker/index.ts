@@ -5882,17 +5882,7 @@ const loanHistoryEditMatch = url.pathname.match(/^\/loans\/history\/(\d+)$/)
               loan_items.tool_item_id,
               loan_items.returned_at AS item_returned_at,
               CASE
-                WHEN loan_items.returned_at IS NOT NULL
-                  AND EXISTS (
-                    SELECT 1
-                    FROM loan_items AS extended_items
-                    INNER JOIN loans AS extended_loans
-                      ON extended_loans.id = extended_items.loan_id
-                    WHERE extended_items.tool_item_id = loan_items.tool_item_id
-                      AND extended_loans.id != loans.id
-                      AND extended_loans.borrowed_at = loan_items.returned_at
-                  )
-                THEN 1
+                WHEN loans.extended_to_loan_id IS NOT NULL THEN 1
                 ELSE 0
               END AS is_extended,
 
@@ -6377,6 +6367,7 @@ const loanHistoryEditMatch = url.pathname.match(/^\/loans\/history\/(\d+)$/)
               .prepare(`
                 UPDATE loans
                 SET
+                  extended_to_loan_id = ?,
                   due_notice_sent_at = COALESCE(
                     due_notice_sent_at,
                     datetime('now', '+9 hours')
@@ -6400,7 +6391,7 @@ const loanHistoryEditMatch = url.pathname.match(/^\/loans\/history\/(\d+)$/)
                   AND status = 'borrowed'
                   AND returned_quantity < quantity
               `)
-              .bind(loanId),
+              .bind(newLoanId, loanId),
           )
 
           await env.DB.batch(statements)
