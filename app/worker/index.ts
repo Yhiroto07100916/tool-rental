@@ -1766,33 +1766,34 @@ async function sendDueNotices(env: Env): Promise<void> {
     return
   }
 
-  const latestUniversalReturnTimeResult = await env.DB
-    .prepare(`
-      SELECT return_time
-      FROM universal_return_times
-      ORDER BY return_time DESC
-      LIMIT 1
-    `)
-    .all<{
-      return_time: string
-    }>()
+  const { date: noticeDate } = getJstDateParts(new Date())
+  const universalReturnCutoffs: Record<string, number | null> = {
+    class: null,
+    chief: null,
+  }
 
-  let latestUniversalReturnFiveMinutesBefore: number | null = null
+  const returnTimeSources = [
+    { type: 'class', tableName: 'universal_return_times' },
+    { type: 'chief', tableName: 'universal_return_times_chief' },
+  ] as const
 
-  if (latestUniversalReturnTimeResult.results.length > 0) {
-    const now = new Date()
-    const { date: noticeDate } = getJstDateParts(now)
+  for (const source of returnTimeSources) {
+    const result = await env.DB
+      .prepare(`
+        SELECT return_time
+        FROM ${source.tableName}
+        ORDER BY return_time ASC
+        LIMIT 1
+      `)
+      .first<{ return_time: string }>()
 
-    const latestUniversalReturnAt = new Date(
-      `${noticeDate}T${latestUniversalReturnTimeResult.results[0].return_time}:00+09:00`,
-    )
-
-    latestUniversalReturnFiveMinutesBefore =
-      latestUniversalReturnAt.getTime() - NOTIFICATION_WINDOW_MS
-
-    console.log(
-      `[Notification] individual notification cutoff: ${new Date(latestUniversalReturnFiveMinutesBefore).toISOString()}`,
-    )
+    if (result) {
+      const returnAt = new Date(
+        `${noticeDate}T${result.return_time}:00+09:00`,
+      )
+      universalReturnCutoffs[source.type] =
+        returnAt.getTime() - NOTIFICATION_WINDOW_MS
+    }
   }
 
   const result = await env.DB
@@ -1885,10 +1886,14 @@ async function sendDueNotices(env: Env): Promise<void> {
       ? dueAt
       : fiveMinutesBefore
 
+    const returnTimeType =
+      loan.class_name === 'チーフ' ? 'chief' : 'class'
+    const universalReturnCutoff =
+      universalReturnCutoffs[returnTimeType]
+
     if (
-      latestUniversalReturnFiveMinutesBefore !== null &&
-      individualNotificationAt >
-        latestUniversalReturnFiveMinutesBefore
+      universalReturnCutoff !== null &&
+      individualNotificationAt > universalReturnCutoff
     ) {
       console.log(
         `[Notification] skipping individual notification for loan ${loan.id} because it is after the universal return notification cutoff`,
