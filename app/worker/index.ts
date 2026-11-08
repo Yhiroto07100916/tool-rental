@@ -6632,6 +6632,15 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
               : '',
         )
 
+        if (values.length > 1) {
+          return json(
+            {
+              detail: '全体返却時刻は1つだけ設定できます',
+            },
+            400,
+          )
+        }
+
         if (
           values.some(
             (value: string) =>
@@ -6732,6 +6741,15 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
               ? value.trim()
               : '',
         )
+
+        if (values.length > 1) {
+          return json(
+            {
+              detail: '全体返却時刻は1つだけ設定できます',
+            },
+            400,
+          )
+        }
 
         if (
           values.some(
