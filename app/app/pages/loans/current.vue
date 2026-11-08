@@ -324,7 +324,7 @@ const loadUniversalReturnTime = async () => {
     const times = result.universal_return_times ?? []
 
     universalReturnTime.value =
-      times.at(-1)?.return_time ?? null
+      times[0]?.return_time ?? null
   } catch (error) {
     console.error(error)
     universalReturnTime.value = null
