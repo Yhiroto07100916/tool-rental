@@ -48,6 +48,7 @@ export interface Loan {
   borrowed_at: string
   due_at: string | null
   overdue_seconds: number
+  is_extended?: number | boolean
   returned_at: string | null
   returned_by_id: number | null
   status: string
@@ -97,5 +98,6 @@ export interface Reservation {
   created_at: string
   updated_at: string
   tool_name: string
+  available_quantity?: number
   queue_position?: number
 }

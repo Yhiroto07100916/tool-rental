@@ -74,6 +74,7 @@
 
           <v-card-text>
             <v-select
+              class="mb-3"
               v-model="returnerClassName"
               :items="classOptions"
               label="クラス"

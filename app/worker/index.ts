@@ -1766,33 +1766,34 @@ async function sendDueNotices(env: Env): Promise<void> {
     return
   }
 
-  const latestUniversalReturnTimeResult = await env.DB
-    .prepare(`
-      SELECT return_time
-      FROM universal_return_times
-      ORDER BY return_time DESC
-      LIMIT 1
-    `)
-    .all<{
-      return_time: string
-    }>()
+  const { date: noticeDate } = getJstDateParts(new Date())
+  const universalReturnCutoffs: Record<string, number | null> = {
+    class: null,
+    chief: null,
+  }
 
-  let latestUniversalReturnFiveMinutesBefore: number | null = null
+  const returnTimeSources = [
+    { type: 'class', tableName: 'universal_return_times' },
+    { type: 'chief', tableName: 'universal_return_times_chief' },
+  ] as const
 
-  if (latestUniversalReturnTimeResult.results.length > 0) {
-    const now = new Date()
-    const { date: noticeDate } = getJstDateParts(now)
+  for (const source of returnTimeSources) {
+    const result = await env.DB
+      .prepare(`
+        SELECT return_time
+        FROM ${source.tableName}
+        ORDER BY return_time ASC
+        LIMIT 1
+      `)
+      .first<{ return_time: string }>()
 
-    const latestUniversalReturnAt = new Date(
-      `${noticeDate}T${latestUniversalReturnTimeResult.results[0].return_time}:00+09:00`,
-    )
-
-    latestUniversalReturnFiveMinutesBefore =
-      latestUniversalReturnAt.getTime() - NOTIFICATION_WINDOW_MS
-
-    console.log(
-      `[Notification] individual notification cutoff: ${new Date(latestUniversalReturnFiveMinutesBefore).toISOString()}`,
-    )
+    if (result) {
+      const returnAt = new Date(
+        `${noticeDate}T${result.return_time}:00+09:00`,
+      )
+      universalReturnCutoffs[source.type] =
+        returnAt.getTime() - NOTIFICATION_WINDOW_MS
+    }
   }
 
   const result = await env.DB
@@ -1885,10 +1886,14 @@ async function sendDueNotices(env: Env): Promise<void> {
       ? dueAt
       : fiveMinutesBefore
 
+    const returnTimeType =
+      loan.class_name === 'チーフ' ? 'chief' : 'class'
+    const universalReturnCutoff =
+      universalReturnCutoffs[returnTimeType]
+
     if (
-      latestUniversalReturnFiveMinutesBefore !== null &&
-      individualNotificationAt >
-        latestUniversalReturnFiveMinutesBefore
+      universalReturnCutoff !== null &&
+      individualNotificationAt >= universalReturnCutoff
     ) {
       console.log(
         `[Notification] skipping individual notification for loan ${loan.id} because it is after the universal return notification cutoff`,
@@ -3935,6 +3940,7 @@ export default {
             reservations.created_at,
             reservations.updated_at,
             tools.name AS tool_name,
+            tools.available_quantity,
             (
               SELECT COUNT(*)
               FROM reservations AS previous_reservations
@@ -5049,6 +5055,22 @@ export default {
           )
         }
 
+        if (dueAt !== null && universalReturnEnabled !== 1) {
+          const globalReturnDueAt = await getNextUniversalReturnDueAt(
+            env.DB,
+            new Date(),
+            isChief,
+          )
+
+          if (
+            globalReturnDueAt !== null &&
+            parseJstDateTime(globalReturnDueAt) <
+              parseJstDateTime(dueAt)
+          ) {
+            dueAt = globalReturnDueAt
+          }
+        }
+
         const loanResult = await env.DB
           .prepare(`
             INSERT INTO loans (
@@ -5775,7 +5797,81 @@ if (
         })
       }
 
-if (url.pathname === '/loans/history' && request.method === 'GET') {
+const loanHistoryEditMatch = url.pathname.match(/^\/loans\/history\/(\d+)$/)
+
+      if (loanHistoryEditMatch && request.method === 'PATCH') {
+        const adminError = requireAdmin(authenticated)
+        if (adminError) return adminError
+
+        const loanItemId = Number(loanHistoryEditMatch[1])
+        if (!Number.isInteger(loanItemId) || loanItemId <= 0) {
+          return json({ detail: '貸出履歴IDが正しくありません' }, 400)
+        }
+
+        let body: any
+        try {
+          body = await request.json()
+        } catch {
+          return json({ detail: 'リクエストが正しくありません' }, 400)
+        }
+
+        const className = typeof body.class_name === 'string' ? body.class_name.trim() : ''
+        const borrowerName = typeof body.borrower_name === 'string' ? body.borrower_name.trim() : ''
+        const dueAt = body.due_at === null || body.due_at === '' ? null : body.due_at
+
+        if (!className || !borrowerName) {
+          return json({ detail: 'クラスと氏名を入力してください' }, 400)
+        }
+        if (dueAt !== null && (
+          typeof dueAt !== 'string' ||
+          !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dueAt) ||
+          Number.isNaN(new Date(`${dueAt}:00+09:00`).getTime())
+        )) {
+          return json({ detail: '返却期限の形式が正しくありません' }, 400)
+        }
+
+        const loanItem = await env.DB
+          .prepare(`
+            SELECT loan_items.loan_id
+            FROM loan_items
+            WHERE loan_items.id = ?
+          `)
+          .bind(loanItemId)
+          .first<{ loan_id: number }>()
+
+        if (!loanItem) return json({ detail: '貸出履歴が見つかりません' }, 404)
+
+        let borrower = await env.DB
+          .prepare('SELECT id FROM borrowers WHERE class_name = ? AND name = ? LIMIT 1')
+          .bind(className, borrowerName)
+          .first<{ id: number }>()
+
+        if (!borrower) {
+          const inserted = await env.DB
+            .prepare(`
+              INSERT INTO borrowers (class_name, name, created_at, updated_at)
+              VALUES (?, ?, datetime('now', '+9 hours'), datetime('now', '+9 hours'))
+            `)
+            .bind(className, borrowerName)
+            .run()
+          const borrowerId = Number(inserted.meta.last_row_id)
+          if (!borrowerId) return json({ detail: '借用者情報を更新できませんでした' }, 500)
+          borrower = { id: borrowerId }
+        }
+
+        await env.DB
+          .prepare(`
+            UPDATE loans
+            SET borrower_id = ?, due_at = ?
+            WHERE id = ?
+          `)
+          .bind(borrower.id, dueAt ? dueAt.replace('T', ' ') + ':00' : null, loanItem.loan_id)
+          .run()
+
+        return json({ detail: '貸出履歴を更新しました' })
+      }
+
+      if (url.pathname === '/loans/history' && request.method === 'GET') {
           const className = url.searchParams.get('class_name')?.trim()
           const status = url.searchParams.get('status')?.trim()
 
@@ -5785,6 +5881,10 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
               loan_items.loan_id,
               loan_items.tool_item_id,
               loan_items.returned_at AS item_returned_at,
+              CASE
+                WHEN loan_items.extended_to_loan_id IS NOT NULL THEN 1
+                ELSE 0
+              END AS is_extended,
 
               loans.borrower_id,
               loans.tool_id,
@@ -5977,6 +6077,31 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
 
           const isChief = loanResult.class_name === 'チーフ'
 
+          const waitingReservation = await env.DB
+            .prepare(`
+              SELECT class_name, name
+              FROM reservations
+              WHERE tool_id = ?
+                AND status = 'waiting'
+              ORDER BY created_at ASC, id ASC
+              LIMIT 1
+            `)
+            .bind(loanResult.tool_id)
+            .first<{
+              class_name: string
+              name: string
+            }>()
+
+          if (waitingReservation) {
+            return json(
+              {
+                detail:
+                  `この工具・機材には予約があります。${waitingReservation.class_name} ${waitingReservation.name}さんの予約を先に処理してください`,
+              },
+              400,
+            )
+          }
+
           const loanDurationMinutes = isChief
             ? loanResult.loan_duration_minutes_per_chief
             : loanResult.loan_duration_minutes
@@ -6104,12 +6229,26 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
             }
           }
 
-          const dueAt = formatJstDateTime(
+          let dueAt = formatJstDateTime(
             new Date(
               Date.now() +
                 loanDurationMinutes * 60 * 1000,
             ),
           )
+
+          const globalReturnDueAt = await getNextUniversalReturnDueAt(
+            env.DB,
+            new Date(),
+            isChief,
+          )
+
+          if (
+            globalReturnDueAt !== null &&
+            parseJstDateTime(globalReturnDueAt) <
+              parseJstDateTime(dueAt)
+          ) {
+            dueAt = globalReturnDueAt
+          }
 
           const newLoanResult = await env.DB
             .prepare(`
@@ -6163,6 +6302,7 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
                   SET
                     returned_at =
                       datetime('now', '+9 hours'),
+                    extended_to_loan_id = ?,
                     returned_by_id = ?,
                     overdue_seconds =
                       CASE
@@ -6180,6 +6320,7 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
                     AND returned_at IS NULL
                 `)
                 .bind(
+                  newLoanId,
                   borrower.id,
                   loanResult.due_at,
                   loanResult.due_at,
@@ -6632,6 +6773,15 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
               : '',
         )
 
+        if (values.length > 1) {
+          return json(
+            {
+              detail: '全体返却時刻は1つだけ設定できます',
+            },
+            400,
+          )
+        }
+
         if (
           values.some(
             (value: string) =>
@@ -6648,27 +6798,87 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
 
         const uniqueValues = [...new Set(values)]
 
-        await env.DB
+        const existingTimes = await env.DB
           .prepare(`
-            DELETE FROM universal_return_times
+            SELECT id
+            FROM universal_return_times
+            ORDER BY id ASC
           `)
-          .run()
+          .all<{ id: number }>()
 
-        if (uniqueValues.length > 0) {
-          const statements = uniqueValues.map(
-            (value: string) =>
-              env.DB
-                .prepare(`
-                  INSERT INTO universal_return_times (
-                    return_time,
-                    created_at
-                  )
-                  VALUES (?, datetime('now', '+9 hours'))
-                `)
-                .bind(value),
-          )
+        if (uniqueValues.length === 0) {
+          await env.DB
+            .prepare('DELETE FROM universal_return_times')
+            .run()
+        } else if (existingTimes.results.length > 0) {
+          const keepId = existingTimes.results[0].id
+          const obsoleteIds = existingTimes.results
+            .slice(1)
+            .map(item => item.id)
 
-          await env.DB.batch(statements)
+          if (obsoleteIds.length > 0) {
+            const placeholders = obsoleteIds.map(() => '?').join(', ')
+            await env.DB
+              .prepare(`
+                INSERT INTO loan_return_notices (
+                  loan_id,
+                  return_time_id,
+                  notice_date,
+                  notified_at,
+                  overdue_notified_at,
+                  return_time_type
+                )
+                SELECT
+                  loan_id,
+                  ?,
+                  notice_date,
+                  notified_at,
+                  overdue_notified_at,
+                  return_time_type
+                FROM loan_return_notices
+                WHERE return_time_id IN (${placeholders})
+                ON CONFLICT(loan_id, return_time_id, notice_date)
+                DO UPDATE SET
+                  notified_at = COALESCE(
+                    loan_return_notices.notified_at,
+                    excluded.notified_at
+                  ),
+                  overdue_notified_at = COALESCE(
+                    loan_return_notices.overdue_notified_at,
+                    excluded.overdue_notified_at
+                  ),
+                  return_time_type = excluded.return_time_type
+              `)
+              .bind(keepId, ...obsoleteIds)
+              .run()
+          }
+
+          await env.DB.batch([
+            env.DB
+              .prepare(`
+                UPDATE universal_return_times
+                SET return_time = ?
+                WHERE id = ?
+              `)
+              .bind(uniqueValues[0], keepId),
+            env.DB
+              .prepare(`
+                DELETE FROM universal_return_times
+                WHERE id != ?
+              `)
+              .bind(keepId),
+          ])
+        } else {
+          await env.DB
+            .prepare(`
+              INSERT INTO universal_return_times (
+                return_time,
+                created_at
+              )
+              VALUES (?, datetime('now', '+9 hours'))
+            `)
+            .bind(uniqueValues[0])
+            .run()
         }
 
         const result = await env.DB
@@ -6684,7 +6894,53 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
             return_time: string
           }>()
 
-        return json({
+                if (uniqueValues.length > 0) {
+          const nextReturnDueAt = await getNextUniversalReturnDueAt(
+            env.DB,
+            new Date(),
+            false,
+          )
+
+          if (nextReturnDueAt !== null) {
+            await env.DB.batch([
+              env.DB
+                .prepare(`
+                  UPDATE loans
+                  SET due_at = ?
+                  WHERE status = 'borrowed'
+                    AND borrower_id IN (
+                      SELECT id FROM borrowers
+                      WHERE class_name != 'チーフ'
+                    )
+                    AND tool_id IN (
+                      SELECT id FROM tools
+                      WHERE universal_return_enabled = 1
+                    )
+                `)
+                .bind(nextReturnDueAt),
+              env.DB
+                .prepare(`
+                  UPDATE loans
+                  SET due_at = ?
+                  WHERE status = 'borrowed'
+                    AND borrower_id IN (
+                      SELECT id FROM borrowers
+                      WHERE class_name != 'チーフ'
+                    )
+                    AND tool_id IN (
+                      SELECT id FROM tools
+                      WHERE universal_return_enabled = 0
+                    )
+                    AND due_at IS NOT NULL
+                    AND datetime(due_at) > datetime(?)
+                `)
+                .bind(nextReturnDueAt, nextReturnDueAt),
+            ])
+            await scheduleNotificationAlarm(env)
+          }
+        }
+
+return json({
           universal_return_times: result.results,
         })
       }
@@ -6733,6 +6989,15 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
               : '',
         )
 
+        if (values.length > 1) {
+          return json(
+            {
+              detail: '全体返却時刻は1つだけ設定できます',
+            },
+            400,
+          )
+        }
+
         if (
           values.some(
             (value: string) =>
@@ -6749,27 +7014,87 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
 
         const uniqueValues = [...new Set(values)]
 
-        await env.DB
+        const existingTimes = await env.DB
           .prepare(`
-            DELETE FROM universal_return_times_chief
+            SELECT id
+            FROM universal_return_times_chief
+            ORDER BY id ASC
           `)
-          .run()
+          .all<{ id: number }>()
 
-        if (uniqueValues.length > 0) {
-          const statements = uniqueValues.map(
-            (value: string) =>
-              env.DB
-                .prepare(`
-                  INSERT INTO universal_return_times_chief (
-                    return_time,
-                    created_at
-                  )
-                  VALUES (?, datetime('now', '+9 hours'))
-                `)
-                .bind(value),
-          )
+        if (uniqueValues.length === 0) {
+          await env.DB
+            .prepare('DELETE FROM universal_return_times_chief')
+            .run()
+        } else if (existingTimes.results.length > 0) {
+          const keepId = existingTimes.results[0].id
+          const obsoleteIds = existingTimes.results
+            .slice(1)
+            .map(item => item.id)
 
-          await env.DB.batch(statements)
+          if (obsoleteIds.length > 0) {
+            const placeholders = obsoleteIds.map(() => '?').join(', ')
+            await env.DB
+              .prepare(`
+                INSERT INTO loan_return_notices (
+                  loan_id,
+                  return_time_id,
+                  notice_date,
+                  notified_at,
+                  overdue_notified_at,
+                  return_time_type
+                )
+                SELECT
+                  loan_id,
+                  ?,
+                  notice_date,
+                  notified_at,
+                  overdue_notified_at,
+                  return_time_type
+                FROM loan_return_notices
+                WHERE return_time_id IN (${placeholders})
+                ON CONFLICT(loan_id, return_time_id, notice_date)
+                DO UPDATE SET
+                  notified_at = COALESCE(
+                    loan_return_notices.notified_at,
+                    excluded.notified_at
+                  ),
+                  overdue_notified_at = COALESCE(
+                    loan_return_notices.overdue_notified_at,
+                    excluded.overdue_notified_at
+                  ),
+                  return_time_type = excluded.return_time_type
+              `)
+              .bind(keepId, ...obsoleteIds)
+              .run()
+          }
+
+          await env.DB.batch([
+            env.DB
+              .prepare(`
+                UPDATE universal_return_times_chief
+                SET return_time = ?
+                WHERE id = ?
+              `)
+              .bind(uniqueValues[0], keepId),
+            env.DB
+              .prepare(`
+                DELETE FROM universal_return_times_chief
+                WHERE id != ?
+              `)
+              .bind(keepId),
+          ])
+        } else {
+          await env.DB
+            .prepare(`
+              INSERT INTO universal_return_times_chief (
+                return_time,
+                created_at
+              )
+              VALUES (?, datetime('now', '+9 hours'))
+            `)
+            .bind(uniqueValues[0])
+            .run()
         }
 
         const result = await env.DB
@@ -6785,7 +7110,53 @@ if (url.pathname === '/loans/history' && request.method === 'GET') {
             return_time: string
           }>()
 
-        return json({
+                if (uniqueValues.length > 0) {
+          const nextReturnDueAt = await getNextUniversalReturnDueAt(
+            env.DB,
+            new Date(),
+            true,
+          )
+
+          if (nextReturnDueAt !== null) {
+            await env.DB.batch([
+              env.DB
+                .prepare(`
+                  UPDATE loans
+                  SET due_at = ?
+                  WHERE status = 'borrowed'
+                    AND borrower_id IN (
+                      SELECT id FROM borrowers
+                      WHERE class_name = 'チーフ'
+                    )
+                    AND tool_id IN (
+                      SELECT id FROM tools
+                      WHERE universal_return_enabled_for_chief = 1
+                    )
+                `)
+                .bind(nextReturnDueAt),
+              env.DB
+                .prepare(`
+                  UPDATE loans
+                  SET due_at = ?
+                  WHERE status = 'borrowed'
+                    AND borrower_id IN (
+                      SELECT id FROM borrowers
+                      WHERE class_name = 'チーフ'
+                    )
+                    AND tool_id IN (
+                      SELECT id FROM tools
+                      WHERE universal_return_enabled_for_chief = 0
+                    )
+                    AND due_at IS NOT NULL
+                    AND datetime(due_at) > datetime(?)
+                `)
+                .bind(nextReturnDueAt, nextReturnDueAt),
+            ])
+            await scheduleNotificationAlarm(env)
+          }
+        }
+
+return json({
           universal_return_times: result.results,
         })
       }

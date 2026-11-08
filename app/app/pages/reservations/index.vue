@@ -64,7 +64,9 @@
           v-for="(reservation, index) in reservations"
           :key="reservation.id"
         >
-          <v-list-item>
+          <v-list-item
+              :class="{ 'reservation-ready': isReadyToLend(reservation, index) }"
+            >
             <template #prepend>
               <v-avatar
                 color="primary"
@@ -82,6 +84,15 @@
             </v-list-item-title>
 
             <v-list-item-subtitle>
+              <v-chip
+                v-if="isReadyToLend(reservation, index)"
+                color="success"
+                size="x-small"
+                variant="tonal"
+                class="mr-2"
+              >
+                貸出可能
+              </v-chip>
               {{ reservation.class_name }}
               {{ reservation.name }}
               <span class="mx-1">・</span>
@@ -190,6 +201,12 @@ const formatDate = (value: string) => {
   })
 }
 
+const isReadyToLend = (reservation: Reservation, index: number) =>
+  index === reservations.value.findIndex(
+    item => item.tool_id === reservation.tool_id,
+  ) &&
+  (reservation.available_quantity ?? 0) >= reservation.quantity
+
 const loadReservations = async () => {
   loading.value = true
   errorMessage.value = ''
@@ -263,3 +280,9 @@ const confirmCancelReservation = async () => {
 
 onMounted(loadReservations)
 </script>
+
+<style scoped>
+.reservation-ready {
+  background: rgba(46, 125, 50, 0.08);
+}
+</style>
