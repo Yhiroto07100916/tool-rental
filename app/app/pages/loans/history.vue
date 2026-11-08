@@ -283,7 +283,7 @@
 
     <tr v-if="!loading && loans.length === 0">
       <td
-        colspan="9"
+        :colspan="auth.isAdmin.value ? 12 : 11"
         class="table-empty"
       >
         貸出履歴はありません。
