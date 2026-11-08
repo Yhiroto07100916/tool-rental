@@ -114,6 +114,7 @@
             <tr
               v-for="item in loan.tool_items"
               :key="item.loan_item_id"
+              :class="isOverdue(loan) ? 'current-loan-row-overdue' : ''"
             >
               <td>{{ loan.class_name }}</td>
 
@@ -330,6 +331,15 @@ const loadUniversalReturnTime = async () => {
   }
 }
 
+const isOverdue = (loan: CurrentLoan) => {
+  if (!loan.due_at) return false
+  const normalized = loan.due_at.replace(' ', 'T')
+  const dueAt = /(?:Z|[+-]\d{2}:\d{2})$/.test(normalized)
+    ? new Date(normalized)
+    : new Date(`${normalized}+09:00`)
+  return Number.isFinite(dueAt.getTime()) && dueAt.getTime() < Date.now()
+}
+
 const clearFilters = () => {
   className.value = null
   toolId.value = null
@@ -490,5 +500,11 @@ onMounted(async () => {
   top: 0;
   z-index: 3;
   background: rgb(var(--v-theme-surface));
+}
+</style>
+
+<style scoped>
+.current-loan-row-overdue {
+  background: rgba(251, 140, 0, 0.14);
 }
 </style>
