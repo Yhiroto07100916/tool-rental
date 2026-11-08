@@ -321,8 +321,8 @@
           <v-card-text>
             <template v-if="selectedTools.length > 0">
               <div
-                v-for="selected in selectedTools"
-                :key="selected.toolId"
+                v-for="(selected, selectedIndex) in selectedTools"
+                :key="`${selected.toolId}-${selectedIndex}`"
                 class="mb-5"
               >
                 <template v-if="getTool(selected.toolId)">
@@ -354,7 +354,7 @@
                       color="error"
                       class="remove-tool-button"
                       aria-label="登録した工具・機材を削除"
-                      @click="removeTool(selected.toolId)"
+                      @click="removeTool(selectedIndex)"
                     />
                   </div>
 
@@ -542,9 +542,19 @@ const currentTool = computed(() =>
     : null,
 )
 
-const currentAvailableItems = computed(() =>
-  currentItems.value.filter(item => item.status === 'available'),
-)
+const currentAvailableItems = computed(() => {
+  const alreadySelectedIds = new Set(
+    selectedTools.value.flatMap(selected =>
+      selected.type === 'loan' ? selected.itemIds : [],
+    ),
+  )
+
+  return currentItems.value.filter(
+    item =>
+      item.status === 'available' &&
+      !alreadySelectedIds.has(item.id),
+  )
+})
 
 const canRegisterCurrentTool = computed(() => {
   if (!form.className.trim() || !form.name.trim()) return false
@@ -555,14 +565,7 @@ const canRegisterCurrentTool = computed(() => {
     currentItemIds.value.length >
     currentTool.value.available_quantity
   ) return false
-  if (
-    selectedTools.value.some(
-      selected => selected.toolId === currentToolId.value,
-    )
-  ) {
-    return false
-  }
-  return true
+   return true
 })
 
 const getTool = (toolId: number) =>
@@ -573,9 +576,7 @@ const getSelectedTool = (toolId: number) =>
 
 const canAddAnotherTool = computed(() =>
   tools.value.some(
-    tool =>
-      tool.available_quantity > 0 &&
-      !selectedTools.value.some(selected => selected.toolId === tool.id),
+    tool => tool.available_quantity > 0,
   ),
 )
 
@@ -612,18 +613,7 @@ const handleCurrentToolChange = async (
 
   if (!toolId) return
 
-  if (
-    selectedTools.value.some(
-      selected => selected.toolId === toolId,
-    )
-  ) {
-    currentToolError.value =
-      'この工具・機材はすでに登録されています。'
-    currentToolId.value = null
-    return
-  }
-
-  await loadCurrentToolItems(toolId)
+   await loadCurrentToolItems(toolId)
 }
 
 const registerCurrentTool = () => {
@@ -646,12 +636,9 @@ const registerCurrentTool = () => {
   currentToolError.value = ''
 }
 
-const removeTool = (toolId: number) => {
+const removeTool = (index: number) => {
   if (isReservationLending.value) return
-
-  selectedTools.value = selectedTools.value.filter(
-    selected => selected.toolId !== toolId,
-  )
+  selectedTools.value.splice(index, 1)
 }
 
 const loadReservation = async (id: number) => {
