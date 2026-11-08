@@ -245,6 +245,15 @@
 
       <td>
         <v-chip
+          v-if="loan.is_extended"
+          color="info"
+          size="small"
+          variant="tonal"
+          class="mr-1"
+        >
+          延長済み
+        </v-chip>
+        <v-chip
           v-if="loan.status === 'returned'"
           color="success"
           size="small"
