@@ -113,7 +113,7 @@
         </v-btn>
       </div>
 
-      <div class="page-table">
+      <div class="page-table history-table-scroll">
         <v-table fixed-header>
   <thead>
     <tr>
