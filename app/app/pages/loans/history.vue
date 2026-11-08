@@ -270,6 +270,14 @@
         >
           貸出中
         </v-chip>
+        <v-btn
+          v-if="auth.isAdmin.value"
+          icon="mdi-pencil"
+          size="x-small"
+          variant="text"
+          aria-label="貸出履歴を編集"
+          @click="openEditDialog(loan)"
+        />
       </td>
     </tr>
 
@@ -285,6 +293,35 @@
 </v-table>
       </div>
     </v-card>
+
+    <v-dialog v-model="editDialog" max-width="520">
+      <v-card>
+        <v-card-title>貸出履歴を編集</v-card-title>
+        <v-card-text>
+          <v-select
+            v-model="editForm.class_name"
+            :items="classOptions"
+            label="クラス"
+          />
+          <v-text-field
+            v-model="editForm.borrower_name"
+            label="借用者氏名"
+          />
+          <v-text-field
+            v-model="editForm.due_at"
+            type="datetime-local"
+            label="返却期限"
+            clearable
+          />
+          <v-alert v-if="editError" type="error" variant="tonal">{{ editError }}</v-alert>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" :disabled="editSaving" @click="editDialog = false">キャンセル</v-btn>
+          <v-btn color="primary" :loading="editSaving" @click="saveLoanEdit">保存</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <v-snackbar
       v-model="snackbar"
@@ -329,6 +366,51 @@ const loading = ref(false)
 const snackbar = ref(false)
 const snackbarText = ref('')
 const snackbarColor = ref('success')
+
+const editDialog = ref(false)
+const editSaving = ref(false)
+const editingLoan = ref<LoanHistoryItem | null>(null)
+const editError = ref('')
+const editForm = reactive({
+  class_name: '',
+  borrower_name: '',
+  due_at: '',
+})
+
+const openEditDialog = (loan: LoanHistoryItem) => {
+  if (!auth.isAdmin.value) return
+  editingLoan.value = loan
+  editForm.class_name = loan.class_name
+  editForm.borrower_name = loan.borrower_name
+  editForm.due_at = loan.due_at
+    ? loan.due_at.replace(' ', 'T').slice(0, 16)
+    : ''
+  editError.value = ''
+  editDialog.value = true
+}
+
+const saveLoanEdit = async () => {
+  if (!auth.isAdmin.value || !editingLoan.value) return
+  editSaving.value = true
+  editError.value = ''
+  try {
+    await request(`/loans/history/${editingLoan.value.loan_item_id}`, {
+      method: 'PATCH',
+      body: {
+        class_name: editForm.class_name,
+        borrower_name: editForm.borrower_name,
+        due_at: editForm.due_at || null,
+      },
+    })
+    editDialog.value = false
+    await loadHistory()
+    showSnackbar('貸出履歴を更新しました。')
+  } catch (error: any) {
+    editError.value = error?.data?.detail || '貸出履歴の更新に失敗しました。'
+  } finally {
+    editSaving.value = false
+  }
+}
 
 const formatDate = (value: string) => {
   const normalized = value.replace(' ', 'T')
