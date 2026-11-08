@@ -1893,7 +1893,7 @@ async function sendDueNotices(env: Env): Promise<void> {
 
     if (
       universalReturnCutoff !== null &&
-      individualNotificationAt > universalReturnCutoff
+      individualNotificationAt >= universalReturnCutoff
     ) {
       console.log(
         `[Notification] skipping individual notification for loan ${loan.id} because it is after the universal return notification cutoff`,
