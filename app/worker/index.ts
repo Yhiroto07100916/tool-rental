@@ -5862,7 +5862,7 @@ const loanHistoryEditMatch = url.pathname.match(/^\/loans\/history\/(\d+)$/)
         await env.DB
           .prepare(`
             UPDATE loans
-            SET borrower_id = ?, due_at = ?, updated_at = datetime('now', '+9 hours')
+            SET borrower_id = ?, due_at = ?
             WHERE id = ?
           `)
           .bind(borrower.id, dueAt ? dueAt.replace('T', ' ') + ':00' : null, loanItem.loan_id)
