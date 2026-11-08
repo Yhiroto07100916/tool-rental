@@ -3935,6 +3935,7 @@ export default {
             reservations.created_at,
             reservations.updated_at,
             tools.name AS tool_name,
+            tools.available_quantity,
             (
               SELECT COUNT(*)
               FROM reservations AS previous_reservations
