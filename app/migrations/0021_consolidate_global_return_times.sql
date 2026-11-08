@@ -1,4 +1,4 @@
-INSERT OR IGNORE INTO loan_return_notices (
+INSERT INTO loan_return_notices (
   loan_id,
   return_time_id,
   notice_date,
@@ -23,7 +23,12 @@ WHERE return_time_id IN (
     ORDER BY return_time ASC, id ASC
     LIMIT 1
   )
-);
+)
+ON CONFLICT(loan_id, return_time_id, notice_date)
+DO UPDATE SET
+  notified_at = COALESCE(loan_return_notices.notified_at, excluded.notified_at),
+  overdue_notified_at = COALESCE(loan_return_notices.overdue_notified_at, excluded.overdue_notified_at),
+  return_time_type = excluded.return_time_type;
 
 DELETE FROM loan_return_notices
 WHERE return_time_id IN (
@@ -45,7 +50,7 @@ WHERE id != (
   LIMIT 1
 );
 
-INSERT OR IGNORE INTO loan_return_notices (
+INSERT INTO loan_return_notices (
   loan_id,
   return_time_id,
   notice_date,
@@ -70,7 +75,12 @@ WHERE return_time_id IN (
     ORDER BY return_time ASC, id ASC
     LIMIT 1
   )
-);
+)
+ON CONFLICT(loan_id, return_time_id, notice_date)
+DO UPDATE SET
+  notified_at = COALESCE(loan_return_notices.notified_at, excluded.notified_at),
+  overdue_notified_at = COALESCE(loan_return_notices.overdue_notified_at, excluded.overdue_notified_at),
+  return_time_type = excluded.return_time_type;
 
 DELETE FROM loan_return_notices
 WHERE return_time_id IN (
