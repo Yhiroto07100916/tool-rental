@@ -1217,7 +1217,7 @@ async function getNotificationSettings(
       if (
         /^(1[1-8]|2[1-8]|3[1-8])R$/.test(className) &&
         typeof roleId === 'string' &&
-        /^\\d{17,20}$/.test(roleId)
+        /^\d{17,20}$/.test(roleId)
       ) {
         discordClassRoleIds[className] = roleId
       }
@@ -1956,7 +1956,7 @@ async function sendDueNotices(env: Env): Promise<void> {
       notificationSettings.discordClassRoleIds[loan.class_name]
     const discordMessage =
       notificationSettings.channel === 'discord' && classRoleId
-        ? `<@&${classRoleId}>\\n${message}`
+        ? `<@&${classRoleId}>\n${message}`
         : message
 
     const notificationResult =
@@ -3430,7 +3430,7 @@ export default {
 
             if (!roleId) continue
 
-            if (!/^\\d{17,20}$/.test(roleId)) {
+            if (!/^\d{17,20}$/.test(roleId)) {
               return json(
                 { detail: `${className}のDiscordロールIDは17〜20桁の数字で入力してください` },
                 400,
