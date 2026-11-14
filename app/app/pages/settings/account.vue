@@ -81,6 +81,39 @@
           >
             Discord Webhook URLは設定済みです。
           </v-alert>
+
+          <v-divider class="my-4" />
+
+          <div class="text-subtitle-2 font-weight-bold mb-1">
+            クラス別ロールメンション（任意）
+          </div>
+          <div class="text-body-2 text-medium-emphasis mb-3">
+            返却通知で該当クラスのロールをメンションします。未入力のクラスはメンションされません。
+          </div>
+
+          <v-alert
+            type="info"
+            variant="tonal"
+            density="compact"
+            class="mb-3"
+          >
+            Discordの「ロールIDをコピー」で取得した17〜20桁の数字を入力してください。チーフにはクラス別ロールを設定しません。
+          </v-alert>
+
+          <v-text-field
+            v-for="className in discordClassNames"
+            :key="className"
+            v-model="discordClassRoleIds[className]"
+            :label="className + ' ロールID'"
+            placeholder="例：123456789012345678"
+            inputmode="numeric"
+            maxlength="20"
+            autocomplete="off"
+            hide-details="auto"
+            density="comfortable"
+            :disabled="notificationLoading || notificationTesting"
+            class="mb-2"
+          />
         </template>
 
         <template v-if="notificationChannel === 'line'">
@@ -644,6 +677,8 @@
 </template>
 
 <script setup lang="ts">
+import { classOptions } from '~/constants/classes'
+
 const api = useApi()
 const auth = useAuth()
 
@@ -661,6 +696,14 @@ const notificationChannel =
 
 const discordWebhookUrl = ref('')
 const discordConfigured = ref(false)
+const discordClassNames = classOptions.filter(
+  className => className !== 'チーフ',
+)
+const discordClassRoleIds = ref<Record<string, string>>(
+  Object.fromEntries(
+    discordClassNames.map(className => [className, '']),
+  ),
+)
 
 const lineChannelAccessToken = ref('')
 const lineChannelSecret = ref('')
@@ -1019,6 +1062,7 @@ const loadNotificationSettings = async () => {
     const result = await api.request<{
       channel: NotificationChannel
       discord_configured: boolean
+      discord_class_role_ids: Record<string, string>
       line_configured: boolean
       line_destination_type:
         | 'user'
@@ -1033,6 +1077,13 @@ const loadNotificationSettings = async () => {
 
     discordConfigured.value =
       result.discord_configured
+
+    discordClassRoleIds.value = Object.fromEntries(
+      discordClassNames.map(className => [
+        className,
+        result.discord_class_role_ids?.[className] ?? '',
+      ]),
+    )
 
     lineConfigured.value =
       result.line_configured
@@ -1056,6 +1107,7 @@ const saveNotificationSettings = async () => {
       detail: string
       channel: NotificationChannel
       discord_configured: boolean
+      discord_class_role_ids: Record<string, string>
       line_configured: boolean
       line_destination_type:
         | 'user'
@@ -1068,6 +1120,7 @@ const saveNotificationSettings = async () => {
       body: {
         channel:
           notificationChannel.value,
+        discord_class_role_ids: discordClassRoleIds.value,
         ...(discordWebhookUrl.value.trim()
           ? {
               discord_webhook_url:
@@ -1114,6 +1167,13 @@ const saveNotificationSettings = async () => {
 
     discordConfigured.value =
       result.discord_configured
+
+    discordClassRoleIds.value = Object.fromEntries(
+      discordClassNames.map(className => [
+        className,
+        result.discord_class_role_ids?.[className] ?? '',
+      ]),
+    )
 
     lineConfigured.value =
       result.line_configured
