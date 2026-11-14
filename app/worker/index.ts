@@ -5038,34 +5038,33 @@ export default {
             ? tool.universal_return_enabled_for_chief
             : tool.universal_return_enabled
 
+        const borrowedAt = new Date()
         let dueAt: string | null = null
 
-        if (universalReturnEnabled === 1) {
-          dueAt = await getNextUniversalReturnDueAt(
-            env.DB,
-            new Date(),
-            isChief,
-          )
-        } else if (loanDurationMinutes !== null) {
+        // 個別の貸出時間制限と全体返却時刻のうち、早い方を返却期限にする
+        if (loanDurationMinutes !== null) {
           dueAt = formatJstDateTime(
             new Date(
-              Date.now() +
+              borrowedAt.getTime() +
                 loanDurationMinutes * 60 * 1000,
             ),
           )
         }
 
-        if (dueAt !== null && universalReturnEnabled !== 1) {
+        if (universalReturnEnabled === 1 || dueAt !== null) {
           const globalReturnDueAt = await getNextUniversalReturnDueAt(
             env.DB,
-            new Date(),
+            borrowedAt,
             isChief,
           )
 
           if (
             globalReturnDueAt !== null &&
-            parseJstDateTime(globalReturnDueAt) <
-              parseJstDateTime(dueAt)
+            (
+              dueAt === null ||
+              parseJstDateTime(globalReturnDueAt) <
+                parseJstDateTime(dueAt)
+            )
           ) {
             dueAt = globalReturnDueAt
           }
@@ -6906,7 +6905,22 @@ const loanHistoryEditMatch = url.pathname.match(/^\/loans\/history\/(\d+)$/)
               env.DB
                 .prepare(`
                   UPDATE loans
-                  SET due_at = ?
+                  SET due_at = (
+                    SELECT CASE
+                      WHEN tools.loan_duration_minutes IS NOT NULL
+                        AND datetime(
+                          loans.borrowed_at,
+                          '+' || tools.loan_duration_minutes || ' minutes'
+                        ) < datetime(?)
+                      THEN datetime(
+                        loans.borrowed_at,
+                        '+' || tools.loan_duration_minutes || ' minutes'
+                      )
+                      ELSE ?
+                    END
+                    FROM tools
+                    WHERE tools.id = loans.tool_id
+                  )
                   WHERE status = 'borrowed'
                     AND borrower_id IN (
                       SELECT id FROM borrowers
@@ -6917,7 +6931,7 @@ const loanHistoryEditMatch = url.pathname.match(/^\/loans\/history\/(\d+)$/)
                       WHERE universal_return_enabled = 1
                     )
                 `)
-                .bind(nextReturnDueAt),
+                .bind(nextReturnDueAt, nextReturnDueAt),
               env.DB
                 .prepare(`
                   UPDATE loans
@@ -7122,7 +7136,22 @@ return json({
               env.DB
                 .prepare(`
                   UPDATE loans
-                  SET due_at = ?
+                  SET due_at = (
+                    SELECT CASE
+                      WHEN tools.loan_duration_minutes_per_chief IS NOT NULL
+                        AND datetime(
+                          loans.borrowed_at,
+                          '+' || tools.loan_duration_minutes_per_chief || ' minutes'
+                        ) < datetime(?)
+                      THEN datetime(
+                        loans.borrowed_at,
+                        '+' || tools.loan_duration_minutes_per_chief || ' minutes'
+                      )
+                      ELSE ?
+                    END
+                    FROM tools
+                    WHERE tools.id = loans.tool_id
+                  )
                   WHERE status = 'borrowed'
                     AND borrower_id IN (
                       SELECT id FROM borrowers
@@ -7133,7 +7162,7 @@ return json({
                       WHERE universal_return_enabled_for_chief = 1
                     )
                 `)
-                .bind(nextReturnDueAt),
+                .bind(nextReturnDueAt, nextReturnDueAt),
               env.DB
                 .prepare(`
                   UPDATE loans
