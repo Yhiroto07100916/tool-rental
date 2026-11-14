@@ -1052,6 +1052,7 @@ type LineDestinationType =
 interface NotificationSettings {
   channel: NotificationChannel
   discordWebhookUrl: string | null
+  discordClassRoleIds: Record<string, string>
   lineChannelAccessToken: string | null
   lineChannelSecret: string | null
   lineDestinationType: LineDestinationType | null
@@ -1168,6 +1169,7 @@ async function getNotificationSettings(
       SELECT
         channel,
         discord_webhook_encrypted,
+        discord_class_role_ids,
         line_channel_access_token_encrypted,
         line_channel_secret_encrypted,
         line_destination_type,
@@ -1179,6 +1181,7 @@ async function getNotificationSettings(
     .first<{
       channel: NotificationChannel
       discord_webhook_encrypted: string | null
+      discord_class_role_ids: string | null
       line_channel_access_token_encrypted: string | null
       line_channel_secret_encrypted: string | null
       line_destination_type:
@@ -1192,6 +1195,7 @@ async function getNotificationSettings(
       channel: 'discord',
       discordWebhookUrl:
         env.DISCORD_WEBHOOK_URL || null,
+      discordClassRoleIds: {},
       lineChannelAccessToken: null,
       lineChannelSecret: null,
       lineDestinationType: null,
@@ -1204,6 +1208,23 @@ async function getNotificationSettings(
       env,
       row.discord_webhook_encrypted,
     )
+
+  let discordClassRoleIds: Record<string, string> = {}
+
+  try {
+    const parsed = JSON.parse(row.discord_class_role_ids ?? '{}') as Record<string, unknown>
+    for (const [className, roleId] of Object.entries(parsed)) {
+      if (
+        /^(1[1-8]|2[1-8]|3[1-8])R$/.test(className) &&
+        typeof roleId === 'string' &&
+        /^\\d{17,20}$/.test(roleId)
+      ) {
+        discordClassRoleIds[className] = roleId
+      }
+    }
+  } catch {
+    console.error('[Notification] invalid Discord class role ID settings')
+  }
 
   const lineChannelAccessToken =
     await decryptNotificationSecret(
@@ -1223,6 +1244,7 @@ async function getNotificationSettings(
       discordWebhookUrl ??
       env.DISCORD_WEBHOOK_URL ??
       null,
+    discordClassRoleIds,
     lineChannelAccessToken,
     lineChannelSecret,
     lineDestinationType:
@@ -1630,6 +1652,7 @@ async function handleLineWebhook(
 async function sendConfiguredNotification(
   env: Env,
   message: string,
+  roleIds: string[] = [],
 ): Promise<NotificationSendResult> {
   try {
     const settings =
@@ -1662,6 +1685,10 @@ async function sendConfiguredNotification(
           },
           body: JSON.stringify({
             content: message,
+            allowed_mentions: {
+              parse: [],
+              roles: [...new Set(roleIds)],
+            },
           }),
         },
       )
@@ -1925,10 +1952,18 @@ async function sendDueNotices(env: Env): Promise<void> {
       `[Cron] sending ${isDeadlineNotice ? 'deadline' : '5-minute'} notification for loan ${loan.id}`,
     )
 
+    const classRoleId =
+      notificationSettings.discordClassRoleIds[loan.class_name]
+    const discordMessage =
+      notificationSettings.channel === 'discord' && classRoleId
+        ? `<@&${classRoleId}>\\n${message}`
+        : message
+
     const notificationResult =
       await sendConfiguredNotification(
         env,
-        message,
+        discordMessage,
+        classRoleId ? [classRoleId] : [],
       )
 
     console.log(
@@ -2143,7 +2178,17 @@ async function sendUniversalReturnNotices(
         '',
       ]
 
+      const roleIds: string[] = []
+
       for (const [className, tools] of grouped) {
+        const roleId =
+          notificationSettings.discordClassRoleIds[className]
+
+        if (notificationSettings.channel === 'discord' && roleId) {
+          messageLines.push(`<@&${roleId}>`)
+          roleIds.push(roleId)
+        }
+
         messageLines.push(className)
         messageLines.push(...tools)
         messageLines.push('')
@@ -2159,6 +2204,7 @@ async function sendUniversalReturnNotices(
         await sendConfiguredNotification(
           env,
           message,
+          roleIds,
         )
 
       console.log(
@@ -2395,7 +2441,17 @@ async function sendUniversalReturnOverdueNotices(
         '',
       ]
 
+      const roleIds: string[] = []
+
       for (const [className, tools] of grouped) {
+        const roleId =
+          notificationSettings.discordClassRoleIds[className]
+
+        if (notificationSettings.channel === 'discord' && roleId) {
+          messageLines.push(`<@&${roleId}>`)
+          roleIds.push(roleId)
+        }
+
         messageLines.push(className)
         messageLines.push(...tools)
         messageLines.push('')
@@ -2411,6 +2467,7 @@ async function sendUniversalReturnOverdueNotices(
         await sendConfiguredNotification(
           env,
           message,
+          roleIds,
         )
 
       console.log(
@@ -3262,6 +3319,8 @@ export default {
           channel: settings.channel,
           discord_configured:
             !!settings.discordWebhookUrl,
+          discord_class_role_ids:
+            settings.discordClassRoleIds,
           line_configured:
             !!settings.lineChannelAccessToken &&
             !!settings.lineDestinationType &&
@@ -3340,6 +3399,49 @@ export default {
 
         const current =
           await getNotificationSettings(env)
+
+        let discordClassRoleIds =
+          current.discordClassRoleIds
+
+        if (body?.discord_class_role_ids !== undefined) {
+          if (
+            !body.discord_class_role_ids ||
+            typeof body.discord_class_role_ids !== 'object' ||
+            Array.isArray(body.discord_class_role_ids)
+          ) {
+            return json(
+              { detail: 'クラス別ロールIDの形式が正しくありません' },
+              400,
+            )
+          }
+
+          const nextRoleIds: Record<string, string> = {}
+
+          for (const [className, rawRoleId] of Object.entries(body.discord_class_role_ids)) {
+            if (!/^(1[1-8]|2[1-8]|3[1-8])R$/.test(className)) {
+              return json(
+                { detail: 'クラス名が正しくありません' },
+                400,
+              )
+            }
+
+            const roleId =
+              typeof rawRoleId === 'string' ? rawRoleId.trim() : ''
+
+            if (!roleId) continue
+
+            if (!/^\\d{17,20}$/.test(roleId)) {
+              return json(
+                { detail: `${className}のDiscordロールIDは17〜20桁の数字で入力してください` },
+                400,
+              )
+            }
+
+            nextRoleIds[className] = roleId
+          }
+
+          discordClassRoleIds = nextRoleIds
+        }
 
         let discordWebhookUrl =
           current.discordWebhookUrl
@@ -3582,6 +3684,7 @@ export default {
             SET
               channel = ?,
               discord_webhook_encrypted = ?,
+              discord_class_role_ids = ?,
               line_channel_access_token_encrypted = ?,
               line_channel_secret_encrypted = ?,
               line_destination_type = ?,
@@ -3592,6 +3695,7 @@ export default {
           .bind(
             channel,
             encryptedDiscordWebhook,
+            JSON.stringify(discordClassRoleIds),
             encryptedLineToken,
             encryptedLineSecret,
             lineDestinationType,
@@ -3604,6 +3708,8 @@ export default {
           channel,
           discord_configured:
             !!discordWebhookUrl,
+          discord_class_role_ids:
+            discordClassRoleIds,
           line_configured:
             !!lineChannelAccessToken &&
             !!lineDestinationType &&
